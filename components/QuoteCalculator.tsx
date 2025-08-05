@@ -70,9 +70,44 @@ export default function QuoteCalculator() {
   const isContactMethodValid = emailOnly || (preferredDate && preferredTime);
   const isFormValid = name && isPhoneValid && isEmailValid && isContactMethodValid;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStep(6);
+
+    const message = `
+📸 *New SafeOn Quote Request*
+
+👤 Name: ${name}
+📞 Phone: ${phone}
+✉️ Email: ${email}
+📅 Date: ${preferredDate || '-'}
+⏰ Time: ${preferredTime || '-'}
+📧 Email only: ${emailOnly ? 'Yes' : 'No'}
+
+🔢 Cameras: ${numCameras}
+🏠 Home Size: ${homeSize}
+⬆️ Roof Mount: ${roofMount ? 'Yes' : 'No'}
+🔌 Long Cable: ${longCable ? 'Yes' : 'No'}
+🛡 Extra Warranty: ${extraWarranty ? 'Yes' : 'No'}
+
+💵 Installation: $${labor}
+🧰 Materials: $${materials}
+🔧 Service: $${service}
+💰 Total: $${total}
+`;
+
+    const token = process.env.NEXT_PUBLIC_TELEGRAM_TOKEN;
+    const chatId = process.env.NEXT_PUBLIC_TELEGRAM_CHAT_ID;
+
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: message,
+        parse_mode: 'Markdown',
+      }),
+    });
   };
 
   return (
