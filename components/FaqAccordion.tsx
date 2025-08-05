@@ -1,7 +1,7 @@
 'use client';
-
 import { useEffect } from 'react';
 import Image from 'next/image';
+import React from 'react'; //
 
 interface FaqItem {
   question: string;
