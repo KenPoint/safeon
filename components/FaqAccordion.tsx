@@ -5,7 +5,7 @@ import React from 'react'; //
 
 interface FaqItem {
   question: string;
-  answer: JSX.Element;
+  answer: React.ReactNode; // ✅ заменили JSX.Element
 }
 
 export default function FaqAccordion() {
