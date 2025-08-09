@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
+import GAEvents, { gaEvent } from "@/components/GAEvents";
 
 export default function QuoteCalculator() {
   const [step, setStep] = useState(1);
@@ -70,8 +71,79 @@ export default function QuoteCalculator() {
   const isContactMethodValid = emailOnly || (preferredDate && preferredTime);
   const isFormValid = name && isPhoneValid && isEmailValid && isContactMethodValid;
 
+  // === GA4: события ===
+
+  // Отправим событие при первом входе в калькулятор
+  useEffect(() => {
+    gaEvent('quote_start', { step: 1 });
+    gaEvent('quote_step_view', { step: 1 });
+  }, []);
+
+  // Отслеживаем просмотр шага при каждом изменении step
+  useEffect(() => {
+    if (step > 1) {
+      gaEvent('quote_step_view', { step });
+    }
+  }, [step]);
+
+  // Трекеры переходов
+  const goNext = () => {
+    gaEvent('quote_next_click', { from_step: step });
+    setStep((s) => Math.min(6, s + 1));
+  };
+
+  const goPrev = () => {
+    gaEvent('quote_prev_click', { from_step: step });
+    setStep((s) => Math.max(1, s - 1));
+  };
+
+  // Изменение ключевых параметров калькулятора
+  useEffect(() => {
+    // Логируем факт изменения параметров
+    gaEvent('quote_parameters_change', {
+      step,
+      cameras: numCameras || 0,
+      home_size: homeSize,
+      roof_mount: roofMount,
+      long_cable: longCable,
+      extra_warranty: extraWarranty,
+    });
+
+    // Если выбрано количество камер — показываем текущую смету
+    if (numCameras) {
+      gaEvent('quote_estimate_shown', {
+        step,
+        cameras: parseInt(numCameras) || 0,
+        home_size: homeSize,
+        roof_mount: roofMount,
+        long_cable: longCable,
+        extra_warranty: extraWarranty,
+        labor,
+        materials,
+        service,
+        total,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [numCameras, homeSize, roofMount, longCable, extraWarranty, labor, materials, service, total]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // GA: попытка отправки лида
+    gaEvent('lead_submit', {
+      source: 'quote_calculator',
+      cameras: parseInt(numCameras) || 0,
+      home_size: homeSize,
+      roof_mount: roofMount,
+      long_cable: longCable,
+      extra_warranty: extraWarranty,
+      labor,
+      materials,
+      service,
+      total,
+    });
+
     setStep(6);
 
     const message = `
@@ -112,13 +184,28 @@ export default function QuoteCalculator() {
 
   return (
     <div className="container py-5">
+      {/* Можно опционально зажигать событие на маунте через компонент */}
+      <GAEvents onMountEventName="quote_start" onMountParams={{ step: 1 }} />
+
       <div className="d-flex justify-content-between align-items-center mb-3">
         <h4 className="text-primary mb-0">
           Estimated Total: {numCameras ? `$${total}` : '--'} <small className="text-muted">*</small>
         </h4>
         <div className="d-flex align-items-center gap-3">
-          <button className="btn btn-outline-primary" disabled={step === 1} onClick={() => setStep(step - 1)}>Previous</button>
-          <button className="btn btn-primary" disabled={step === 5 || (step === 1 && !numCameras)} onClick={() => setStep(step + 1)}>Next</button>
+          <button
+            className="btn btn-outline-primary"
+            disabled={step === 1}
+            onClick={goPrev}
+          >
+            Previous
+          </button>
+          <button
+            className="btn btn-primary"
+            disabled={step === 5 || (step === 1 && !numCameras)}
+            onClick={goNext}
+          >
+            Next
+          </button>
         </div>
       </div>
 
@@ -126,7 +213,14 @@ export default function QuoteCalculator() {
         {step === 1 && (
           <>
             <h5>Step {step}/5. How many cameras do you need?</h5>
-            <select className="form-select" value={numCameras} onChange={(e) => setNumCameras(e.target.value)}>
+            <select
+              className="form-select"
+              value={numCameras}
+              onChange={(e) => {
+                setNumCameras(e.target.value);
+                gaEvent('quote_cameras_select', { value: e.target.value || 0 });
+              }}
+            >
               <option value="">Not selected</option>
               {[2, 3, 4, 5, 6, 7, 8].map(n => (
                 <option key={n} value={n}>{n} cameras</option>
@@ -138,7 +232,14 @@ export default function QuoteCalculator() {
         {step === 2 && (
           <>
             <h5>Step {step}/5. What size is your home?</h5>
-            <select className="form-select" value={homeSize} onChange={(e) => setHomeSize(e.target.value)}>
+            <select
+              className="form-select"
+              value={homeSize}
+              onChange={(e) => {
+                setHomeSize(e.target.value);
+                gaEvent('quote_home_size_select', { value: e.target.value });
+              }}
+            >
               <option value="normal">Normal</option>
               <option value="medium">Medium</option>
               <option value="large">Large</option>
@@ -155,15 +256,33 @@ export default function QuoteCalculator() {
           <>
             <h5>Step {step}/5. Installation Options</h5>
             <div className="form-check">
-              <input className="form-check-input" type="checkbox" checked={roofMount} onChange={(e) => setRoofMount(e.target.checked)} id="roofMount" />
+              <input
+                className="form-check-input"
+                type="checkbox"
+                checked={roofMount}
+                onChange={(e) => { setRoofMount(e.target.checked); gaEvent('quote_roof_mount_toggle', { value: e.target.checked }); }}
+                id="roofMount"
+              />
               <label className="form-check-label" htmlFor="roofMount">Installation above 10ft height</label>
             </div>
             <div className="form-check">
-              <input className="form-check-input" type="checkbox" checked={longCable} onChange={(e) => setLongCable(e.target.checked)} id="longCable" />
+              <input
+                className="form-check-input"
+                type="checkbox"
+                checked={longCable}
+                onChange={(e) => { setLongCable(e.target.checked); gaEvent('quote_long_cable_toggle', { value: e.target.checked }); }}
+                id="longCable"
+              />
               <label className="form-check-label" htmlFor="longCable">Long cable run (&gt;20m)</label>
             </div>
             <div className="form-check">
-              <input className="form-check-input" type="checkbox" checked={extraWarranty} onChange={(e) => setExtraWarranty(e.target.checked)} id="extraWarranty" />
+              <input
+                className="form-check-input"
+                type="checkbox"
+                checked={extraWarranty}
+                onChange={(e) => { setExtraWarranty(e.target.checked); gaEvent('quote_extra_warranty_toggle', { value: e.target.checked }); }}
+                id="extraWarranty"
+              />
               <label className="form-check-label" htmlFor="extraWarranty">Add 1 extra year of warranty</label>
             </div>
             <small className="text-muted d-block mt-2">Included: 1-year standard warranty</small>
